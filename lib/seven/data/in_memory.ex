@@ -7,7 +7,7 @@ defmodule Seven.Data.InMemory do
 
   @id_regex ~r/^[A-Fa-f0-9\-]{24}$/
 
-  defstruct events: [], processes: []
+  defstruct events: [], processes: [], services: []
 
   def start_link(opts \\ []) do
     Log.info("Persistence is InMemory")
@@ -29,9 +29,19 @@ defmodule Seven.Data.InMemory do
     GenServer.cast(__MODULE__, {:upsert_process, [process_id, value]})
   end
 
+  @spec upsert_service(bitstring, map) :: any
+  def upsert_service(server_name, value) do
+    GenServer.cast(__MODULE__, {:upsert_service, [server_name, value]})
+  end
+
   @spec get_process(bitstring) :: map | nil
   def get_process(process_id) do
     GenServer.call(__MODULE__, {:get_process, process_id})
+  end
+
+  @spec get_service(bitstring) :: map | nil
+  def get_service(server_name) do
+    GenServer.call(__MODULE__, {:get_service, server_name})
   end
 
   @spec new_id :: any
@@ -106,6 +116,11 @@ defmodule Seven.Data.InMemory do
     {:reply, process, state}
   end
 
+  def handle_call({:get_service, server_name}, _from, %{services: services} = state) do
+    service = services |> Enum.find(fn s -> s.server_name == server_name end)
+    {:reply, service, state}
+  end
+
   def handle_call(:max_counter_in_events, _from, %{events: events} = state) do
     items = events |> Enum.max_by(&Map.fetch(&1, :counter), fn -> 0 end)
     {:reply, items, state}
@@ -161,5 +176,16 @@ defmodule Seven.Data.InMemory do
       end
 
     {:noreply, %{state | processes: processes}}
+  end
+
+  def handle_cast({:upsert_service, [server_name, value]}, %{services: services} = state) do
+    value = value.internal_state |> :base64.decode() |> :erlang.binary_to_term()
+    services =
+      case Enum.find_index(services, fn s -> s.server_name == server_name end) do
+        nil -> services ++ [value]
+        index -> put_in(services, [Access.at(index)], value)
+      end
+
+    {:noreply, %{state | services: services}}
   end
 end
