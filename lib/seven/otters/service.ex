@@ -10,13 +10,16 @@ defmodule Seven.Otters.Service do
 
       alias Seven.Utils.Events
 
+      def command_timeout, do: 5_000
+      defoverridable command_timeout: 0
+
       # API
       def start_link(opts \\ []) do
         GenServer.start_link(__MODULE__, :ok, opts ++ [name: __MODULE__])
       end
 
       @spec command(Map.t()) :: any
-      def command(command), do: GenServer.call(__MODULE__, {:command, command})
+      def command(command), do: GenServer.call(__MODULE__, {:command, command}, command_timeout())
 
       @spec state() :: any
       def state, do: GenServer.call(__MODULE__, :state)
